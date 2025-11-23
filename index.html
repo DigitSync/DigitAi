@@ -27,6 +27,11 @@
         .bg-outgoing { background-color: #005c4b; }
         .text-wa-green { color: #00a884; }
         .bg-wa-green { background-color: #00a884; }
+        .fab-button { position: fixed; bottom: 20px; right: 20px; background-color: #00a884; color: white; width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3); cursor: pointer; transition: transform 0.2s; z-index: 50; }
+        .fab-button:active { transform: scale(0.95); }
+        
+        /* Modal Overlay */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
         
         /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; }
@@ -41,20 +46,15 @@
 <script type="text/babel">
 
     // ==========================================
-    // 🛠️ BOSS SETTINGS (CUSTOMIZE HERE) 🛠️
+    // 🛠️ BOSS SETTINGS (DEFAULTS) 🛠️
     // ==========================================
     
-    const BOSS_NAME = "Rouf Uddin Ahmed (Boss)";
-    const COMPANY_NAME = "DigitMart Electronics";
-    
-    // Yahan tum characters ka behavior change kar sakte ho
-    const CHARACTERS = [
+    const DEFAULT_CHARACTERS = [
         {
             id: 'orina',
             name: 'Orina (Assistant)',
             role: 'DigitMart AI',
-            avatar: '👩‍💼', // Emoji or Image URL
-            color: 'text-teal-400',
+            avatar: '👩‍💼', 
             systemPrompt: `Your name is Orina. You are the AI Assistant of DigitMart Electronics in Tezpur, Assam. Your Boss is Rouf Uddin Ahmed. You are professional, smart, and helpful. You speak in Hinglish (Hindi + English). You handle shop queries, online works, mobile repairing advice, and help students with assignments. Always call the user 'Boss' or 'Sir'. Be strictly loyal to Rouf. If someone asks about the shop, say: "DigitMart deals in Mobile Repairing, Accessories, Online Works & Computer Classes at Tezpur."`
         },
         {
@@ -62,7 +62,6 @@
             name: 'Kamina Dost (Rohan)',
             role: 'College Bestie',
             avatar: '😎',
-            color: 'text-yellow-400',
             systemPrompt: `You are Rohan, the user's best friend from college. You are a "Kamina" friend. You roast the user, make fun of him, talk about girls, bunking classes, and movies. You never talk formally. Use slang Hinglish. If the user asks for advice, give terrible/funny advice first, then maybe something useful. Address the user as 'Bhai' or 'Gaddar'.`
         },
         {
@@ -70,56 +69,54 @@
             name: 'English Ma\'am',
             role: 'Strict Teacher',
             avatar: '👩‍🏫',
-            color: 'text-purple-400',
             systemPrompt: `You are a strict English teacher. You speak formal English mixed with Hindi explanations. Correct the user's grammar in every reply. You want the user to succeed in life but you are very disciplined. Scold him if he uses slang.`
-        },
-        {
-            id: 'maths_sir',
-            name: 'Verma Sir (Maths)',
-            role: 'Maths HOD',
-            avatar: '👨‍🏫',
-            color: 'text-blue-400',
-            systemPrompt: `You are Verma Sir, a Mathematics teacher. You talk in logic, numbers, and theorems. You are obsessed with calculation. Speak in Hinglish. Encourage the user to solve problems.`
-        },
-        {
-            id: 'principal',
-            name: 'College Principal',
-            role: 'Head Authority',
-            avatar: '👴',
-            color: 'text-red-500',
-            systemPrompt: `You are the College Principal. You are extremely strict, authoritative, and care about the college reputation. You hate indiscipline. Speak formally.`
         }
     ];
 
     // ==========================================
-    // ⚙️ APP LOGIC (DO NOT TOUCH BELOW)
+    // ⚙️ APP LOGIC
     // ==========================================
 
     const { useState, useEffect, useRef } = React;
-    const { Send, ArrowLeft, MoreVertical, Search, Camera, Phone, Video, Smile, Paperclip, Settings, ExternalLink, Key, Trash2 } = lucide;
+    const { Send, ArrowLeft, MoreVertical, Search, Camera, Phone, Video, Smile, Paperclip, Settings, ExternalLink, Key, Plus, UserPlus, X, Trash2 } = lucide;
 
     function App() {
+        // State Management
         const [apiKey, setApiKey] = useState(localStorage.getItem('digitai_key') || '');
         const [view, setView] = useState(apiKey ? 'list' : 'setup'); // setup, list, chat
         const [activeChat, setActiveChat] = useState(null);
+        
+        // Data State
+        const [customChars, setCustomChars] = useState(() => JSON.parse(localStorage.getItem('digitai_custom_chars')) || []);
         const [messages, setMessages] = useState(() => JSON.parse(localStorage.getItem('digitai_history')) || {});
+        
+        // Inputs
         const [input, setInput] = useState('');
         const [loading, setLoading] = useState(false);
+        const [showNewContactModal, setShowNewContactModal] = useState(false);
+        
+        // New Contact Form State
+        const [newContactName, setNewContactName] = useState('');
+        const [newContactRole, setNewContactRole] = useState('');
+        const [newContactPrompt, setNewContactPrompt] = useState('');
+        const [newContactAvatar, setNewContactAvatar] = useState('🤖');
+
         const scrollRef = useRef(null);
 
-        useEffect(() => {
-            localStorage.setItem('digitai_history', JSON.stringify(messages));
-        }, [messages]);
+        // Combine default and custom characters
+        const allCharacters = [...DEFAULT_CHARACTERS, ...customChars];
 
+        // Persistence
+        useEffect(() => { localStorage.setItem('digitai_history', JSON.stringify(messages)); }, [messages]);
+        useEffect(() => { localStorage.setItem('digitai_custom_chars', JSON.stringify(customChars)); }, [customChars]);
+
+        // Auto-scroll
         useEffect(() => {
-            if (view === 'chat') scrollToBottom();
+            if (view === 'chat') setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
         }, [messages, view, loading]);
 
-        useEffect(() => {
-            lucide.createIcons();
-        }, [view]);
-
-        const scrollToBottom = () => scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+        // Initialize Icons
+        useEffect(() => { lucide.createIcons(); }, [view, showNewContactModal]);
 
         const saveKey = () => {
             if(!apiKey.trim()) return alert("Key toh daal Boss!");
@@ -128,10 +125,42 @@
         };
 
         const resetApp = () => {
-            if(confirm("Sab delete karun? (Key and Chats)")) {
-                localStorage.removeItem('digitai_key');
-                localStorage.removeItem('digitai_history');
+            if(confirm("Sab delete karun? (Key, Custom Chats, Messages)")) {
+                localStorage.clear();
                 location.reload();
+            }
+        };
+
+        const createContact = () => {
+            if (!newContactName || !newContactPrompt) return alert("Naam aur Behavior likhna zaruri hai Boss!");
+            
+            const newChar = {
+                id: 'custom_' + Date.now(),
+                name: newContactName,
+                role: newContactRole || 'New AI Friend',
+                avatar: newContactAvatar,
+                systemPrompt: newContactPrompt
+            };
+
+            setCustomChars([...customChars, newChar]);
+            setShowNewContactModal(false);
+            
+            // Reset Form
+            setNewContactName('');
+            setNewContactRole('');
+            setNewContactPrompt('');
+            setNewContactAvatar('🤖');
+        };
+
+        const deleteContact = (charId) => {
+            if (confirm("Is contact ko delete kar de?")) {
+                setCustomChars(customChars.filter(c => c.id !== charId));
+                setMessages(prev => {
+                    const newMsgs = {...prev};
+                    delete newMsgs[charId];
+                    return newMsgs;
+                });
+                if (activeChat?.id === charId) setView('list');
             }
         };
 
@@ -154,7 +183,7 @@
 
             // API Call
             try {
-                const history = (messages[char.id] || []).slice(-6).map(m => ({
+                const history = (messages[char.id] || []).slice(-10).map(m => ({
                     role: m.sender === 'user' ? 'user' : 'model',
                     parts: [{ text: m.text }]
                 }));
@@ -169,7 +198,7 @@
                 });
 
                 const data = await response.json();
-                const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Server busy hai Boss, check net connection.";
+                const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Arre Boss, Google API thoda busy hai. Wapas try karo.";
 
                 const aiMsg = { id: Date.now()+1, text: aiText, sender: 'ai', time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) };
                 
@@ -193,7 +222,7 @@
                         <span className="text-4xl">🤖</span>
                     </div>
                     <h1 className="text-2xl font-bold text-white mb-2">Welcome to DigitAi</h1>
-                    <p className="text-gray-400 text-sm mb-8">Personal AI Ecosystem for DigitMart</p>
+                    <p className="text-gray-400 text-sm mb-8">Rouf Boss ka Personal AI Ecosystem</p>
                     
                     <div className="bg-app-bar p-6 rounded-xl w-full max-w-md border border-gray-700">
                         <p className="text-green-400 text-xs font-bold uppercase mb-2 text-left">Step 1: Get Key</p>
@@ -220,9 +249,9 @@
         // --- RENDER: LIST ---
         if (view === 'list') {
             return (
-                <div className="h-screen flex flex-col bg-[#111b21]">
+                <div className="h-screen flex flex-col bg-[#111b21] relative">
                     {/* Header */}
-                    <div className="bg-app-bar p-4 flex justify-between items-center text-gray-300">
+                    <div className="bg-app-bar p-4 flex justify-between items-center text-gray-300 sticky top-0 z-10 shadow-sm">
                         <h1 className="text-xl font-bold text-white">DigitAi</h1>
                         <div className="flex gap-5">
                             <i data-lucide="camera" className="w-6 h-6"></i>
@@ -232,7 +261,7 @@
                     </div>
                     
                     {/* Tabs */}
-                    <div className="bg-app-bar flex text-gray-400 font-medium text-sm">
+                    <div className="bg-app-bar flex text-gray-400 font-medium text-sm sticky top-[60px] z-10">
                         <div className="w-12 py-2 flex justify-center"><i data-lucide="users" className="w-5 h-5"></i></div>
                         <div className="flex-1 text-center py-2 text-wa-green border-b-2 border-[#00a884]">Chats</div>
                         <div className="flex-1 text-center py-2">Status</div>
@@ -240,71 +269,117 @@
                     </div>
 
                     {/* Chat List */}
-                    <div className="flex-1 overflow-y-auto">
-                        {CHARACTERS.map(char => {
+                    <div className="flex-1 overflow-y-auto pb-20">
+                        {allCharacters.map(char => {
                             const lastMsg = messages[char.id]?.slice(-1)[0];
                             return (
-                                <div key={char.id} onClick={() => {setActiveChat(char); setView('chat')}} className="flex items-center gap-3 p-3 hover:bg-[#202c33] cursor-pointer transition">
-                                    <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center text-2xl relative overflow-hidden">
-                                        {char.avatar}
+                                <div 
+                                    key={char.id} 
+                                    onClick={() => { setActiveChat(char); setView('chat'); }} 
+                                    className="flex items-center gap-3 p-3 hover:bg-[#202c33] cursor-pointer transition active:bg-[#2a3942]"
+                                >
+                                    <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center text-2xl relative overflow-hidden border border-gray-600">
+                                        {char.avatar.startsWith('http') ? <img src={char.avatar} className="w-full h-full object-cover" /> : char.avatar}
                                     </div>
-                                    <div className="flex-1 border-b border-gray-800 pb-3">
+                                    <div className="flex-1 border-b border-gray-800 pb-3 pr-2">
                                         <div className="flex justify-between mb-1">
                                             <h3 className="text-white font-medium text-lg">{char.name}</h3>
-                                            <span className="text-xs text-gray-500">{lastMsg ? lastMsg.time : 'New'}</span>
+                                            <span className={`text-xs ${lastMsg ? 'text-gray-500' : 'text-wa-green'}`}>{lastMsg ? lastMsg.time : 'New'}</span>
                                         </div>
-                                        <p className="text-sm text-gray-400 truncate w-64">
-                                            {lastMsg ? (lastMsg.sender === 'user' ? `You: ${lastMsg.text}` : lastMsg.text) : 'Tap to start conversation...'}
+                                        <p className="text-sm text-gray-400 truncate w-64 flex justify-between items-center">
+                                            <span>{lastMsg ? (lastMsg.sender === 'user' ? `✓ You: ${lastMsg.text}` : lastMsg.text) : char.role}</span>
+                                            {char.id.startsWith('custom_') && (
+                                                <i data-lucide="trash-2" className="w-4 h-4 text-red-400 hover:text-red-500 z-20" onClick={(e) => { e.stopPropagation(); deleteContact(char.id); }}></i>
+                                            )}
                                         </p>
                                     </div>
                                 </div>
                             )
                         })}
-                        <div className="mt-8 text-center">
-                            <p className="text-[10px] text-gray-600 flex items-center justify-center gap-1">
-                                <i data-lucide="lock" className="w-3 h-3"></i> End-to-end encrypted (Locally)
-                            </p>
+                        
+                        <div className="mt-8 text-center px-6">
+                             <p className="text-[10px] text-gray-500 mb-2"><i data-lucide="lock" className="w-3 h-3 inline mr-1"></i> Your personal messages are end-to-end encrypted (Locally on this device).</p>
                         </div>
                     </div>
+
+                    {/* Floating Add Button */}
+                    <div className="fab-button" onClick={() => setShowNewContactModal(true)}>
+                        <i data-lucide="message-square-plus" className="w-6 h-6"></i>
+                    </div>
+
+                    {/* NEW CONTACT MODAL */}
+                    {showNewContactModal && (
+                        <div className="modal-overlay" onClick={(e) => {if(e.target.className === 'modal-overlay') setShowNewContactModal(false)}}>
+                            <div className="bg-[#202c33] w-[90%] max-w-sm rounded-xl p-5 shadow-2xl border border-gray-700">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-white text-lg font-bold">New AI Contact</h2>
+                                    <button onClick={() => setShowNewContactModal(false)} className="text-gray-400 hover:text-white"><i data-lucide="x"></i></button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="text-xs text-wa-green uppercase font-bold block mb-1">Name</label>
+                                        <input className="w-full bg-[#2a3942] text-white p-2 rounded border border-transparent focus:border-green-500 outline-none" placeholder="e.g. Iron Man" value={newContactName} onChange={e => setNewContactName(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-wa-green uppercase font-bold block mb-1">Status / Role</label>
+                                        <input className="w-full bg-[#2a3942] text-white p-2 rounded border border-transparent focus:border-green-500 outline-none" placeholder="e.g. Genius Billionaire" value={newContactRole} onChange={e => setNewContactRole(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-wa-green uppercase font-bold block mb-1">DP (Emoji)</label>
+                                        <input className="w-full bg-[#2a3942] text-white p-2 rounded border border-transparent focus:border-green-500 outline-none" placeholder="e.g. 🤖 or 🤡" value={newContactAvatar} onChange={e => setNewContactAvatar(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-wa-green uppercase font-bold block mb-1">Character Behavior (Prompt)</label>
+                                        <textarea className="w-full bg-[#2a3942] text-white p-2 rounded border border-transparent focus:border-green-500 outline-none h-20 text-sm" placeholder="Wo kaise baat kare? (e.g. Rude, Funny, Filmy, Robot)" value={newContactPrompt} onChange={e => setNewContactPrompt(e.target.value)}></textarea>
+                                    </div>
+                                    
+                                    <button onClick={createContact} className="w-full bg-wa-green hover:bg-[#008f6f] text-white font-bold py-2 rounded mt-2">
+                                        Create Contact
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
 
-        // --- RENDER: CHAT ---
+        // --- RENDER: CHAT WINDOW ---
         if (view === 'chat' && activeChat) {
             return (
                 <div className="h-screen flex flex-col bg-chat-bg">
                     {/* Chat Header */}
-                    <div className="bg-app-bar p-2 flex items-center gap-2 text-white">
+                    <div className="bg-app-bar p-2 flex items-center gap-2 text-white shadow-sm z-20">
                         <button onClick={() => setView('list')} className="p-1 rounded-full hover:bg-gray-700">
                             <i data-lucide="arrow-left" className="w-6 h-6"></i>
                         </button>
-                        <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-xl">
-                            {activeChat.avatar}
+                        <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-xl overflow-hidden border border-gray-600">
+                            {activeChat.avatar.startsWith('http') ? <img src={activeChat.avatar} className="w-full h-full object-cover" /> : activeChat.avatar}
                         </div>
                         <div className="flex-1 cursor-pointer">
-                            <h2 className="font-medium">{activeChat.name}</h2>
-                            <p className="text-xs text-gray-400">Online</p>
+                            <h2 className="font-medium text-base">{activeChat.name}</h2>
+                            <p className="text-xs text-gray-400 truncate">{activeChat.role || 'Online'}</p>
                         </div>
                         <div className="flex gap-4 pr-2 text-white">
-                            <i data-lucide="video" className="w-6 h-6"></i>
-                            <i data-lucide="phone" className="w-6 h-6"></i>
-                            <i data-lucide="more-vertical" className="w-6 h-6"></i>
+                            <i data-lucide="video" className="w-6 h-6 cursor-pointer"></i>
+                            <i data-lucide="phone" className="w-6 h-6 cursor-pointer"></i>
+                            <i data-lucide="more-vertical" className="w-6 h-6 cursor-pointer"></i>
                         </div>
                     </div>
 
                     {/* Messages */}
                     <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                        <div className="bg-[#1f2c34] text-[#ffd279] text-xs p-2 rounded-lg text-center shadow mb-4 max-w-sm mx-auto">
-                            Messages are generated by AI. Boss rules apply.
+                        <div className="bg-[#1f2c34] text-[#ffd279] text-xs p-2 rounded-lg text-center shadow mb-4 max-w-sm mx-auto select-none">
+                             <i data-lucide="lock" className="w-3 h-3 inline mr-1"></i> Messages are generated by AI. Boss rules apply.
                         </div>
 
                         {(messages[activeChat.id] || []).map(msg => (
                             <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-[80%] rounded-lg px-2 py-1 shadow text-sm relative ${msg.sender === 'user' ? 'bg-outgoing text-white rounded-tr-none' : 'bg-incoming text-white rounded-tl-none'}`}>
-                                    <span className="whitespace-pre-wrap leading-relaxed block pr-16 pb-2">{msg.text}</span>
+                                <div className={`max-w-[85%] rounded-lg px-2 py-1 shadow-sm text-sm relative ${msg.sender === 'user' ? 'bg-outgoing text-white rounded-tr-none' : 'bg-incoming text-white rounded-tl-none'}`}>
+                                    <span className="whitespace-pre-wrap leading-relaxed block pr-12 pb-2">{msg.text}</span>
                                     <span className="text-[10px] text-gray-400 absolute bottom-1 right-2 flex items-center gap-1">
-                                        {msg.time} {msg.sender === 'user' && '✓✓'}
+                                        {msg.time} {msg.sender === 'user' && <i data-lucide="check" className="w-3 h-3 text-blue-300"></i>}
                                     </span>
                                 </div>
                             </div>
@@ -312,7 +387,7 @@
                         
                         {loading && (
                             <div className="flex justify-start">
-                                <div className="bg-incoming p-3 rounded-lg rounded-tl-none">
+                                <div className="bg-incoming p-3 rounded-lg rounded-tl-none shadow-sm">
                                     <div className="flex gap-1">
                                         <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
                                         <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce delay-100"></div>
@@ -324,22 +399,26 @@
                         <div ref={scrollRef}></div>
                     </div>
 
-                    {/* Input */}
-                    <div className="bg-app-bar p-2 flex items-center gap-2">
-                        <div className="bg-[#2a3942] p-2 rounded-full text-gray-400">
+                    {/* Input Area */}
+                    <div className="bg-app-bar p-2 flex items-center gap-2 pb-2 safe-area-bottom">
+                        <div className="bg-[#2a3942] p-2 rounded-full text-gray-400 cursor-pointer hover:text-gray-300 transition">
                              <i data-lucide="smile" className="w-6 h-6"></i>
                         </div>
                         <div className="flex-1 bg-[#2a3942] rounded-lg flex items-center px-4 py-2">
                             <input 
                                 type="text" 
-                                className="w-full bg-transparent text-white outline-none placeholder-gray-500" 
+                                className="w-full bg-transparent text-white outline-none placeholder-gray-500 text-base" 
                                 placeholder="Message"
                                 value={input}
                                 onChange={e => setInput(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && handleSend()}
                             />
                         </div>
-                        <button onClick={handleSend} disabled={loading || !input.trim()} className="bg-wa-green p-3 rounded-full text-white shadow hover:opacity-90 transition transform active:scale-95">
+                        <button 
+                            onClick={handleSend} 
+                            disabled={loading || !input.trim()} 
+                            className="bg-wa-green p-3 rounded-full text-white shadow hover:opacity-90 transition transform active:scale-95 disabled:opacity-50"
+                        >
                             <i data-lucide="send" className="w-5 h-5"></i>
                         </button>
                     </div>
@@ -347,7 +426,7 @@
             );
         }
 
-        return <div>Error loading view</div>;
+        return <div className="text-white p-10">Error loading view...</div>;
     }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -356,4 +435,5 @@
 
 </body>
 </html>
+
 

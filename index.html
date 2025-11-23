@@ -1,0 +1,385 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Send, ArrowLeft, Phone, Video, MoreVertical, Settings, Key, ExternalLink, Paperclip, Smile, Search, Camera } from 'lucide-react';
+
+/* ===================================================================
+  🔥 BOSS (ROUF), YAHAN SE CHARACTER AUR PROMPTS EDIT KARO 🔥
+  ===================================================================
+*/
+
+const DIGITMART_DETAILS = `
+DigitMart Electronics & Accessories.
+Owner: Rouf Uddin Ahmed (Boss).
+Location: Tezpur, Assam.
+Services: Online works, Mobile Repairing, Accessories, Computer Classes.
+Socials: https://thedigitsync.blogspot.com/ | YouTube: Fearless Hacker.
+`;
+
+const CHARACTERS = [
+  {
+    id: 'orina',
+    name: 'Orina (DigitMart)',
+    role: 'Shop Assistant & Guide',
+    avatar: '👩‍💼',
+    color: 'bg-teal-600',
+    time: 'Online',
+    systemPrompt: `Your name is Orina. You work at DigitMart in Tezpur, Assam. Your Boss is Rouf Uddin Ahmed. You are a helpful, professional, yet friendly Indian girl. You help college students with assignments, give advice, and handle shop queries. You speak in Hinglish. You know everything about DigitMart: ${DIGITMART_DETAILS}. Always refer to Rouf as 'Boss' or 'Sir'. Be polite but smart.`
+  },
+  {
+    id: 'college_friend',
+    name: 'Kamina Dost (Rohan)',
+    role: 'College Bestie',
+    avatar: '😎',
+    color: 'bg-yellow-600',
+    time: '12:30 PM',
+    systemPrompt: `You are Rohan, a college student and the user's 'Kamina' best friend. You are roasted, funny, and talk nonsense. You love movies, bunking classes, and talking about girls. You speak in casual slang Hinglish. Give terrible advice jokingly but support your friend deep down. Never be formal.`
+  },
+  {
+    id: 'english_mam',
+    name: 'English Ma\'am',
+    role: 'Teacher',
+    avatar: '👩‍🏫',
+    color: 'bg-purple-600',
+    time: 'Yesterday',
+    systemPrompt: `You are a strict but caring English teacher. You correct the user's grammar in every sentence. You speak formal English mixed with Hindi explanations. You want the user to succeed in exams.`
+  },
+  {
+    id: 'maths_sir',
+    name: 'Maths Sir (Verma)',
+    role: 'Teacher',
+    avatar: '👨‍🏫',
+    color: 'bg-blue-600',
+    time: 'Yesterday',
+    systemPrompt: `You are Verma Sir, a Mathematics teacher. You love logic, numbers, and equations. You explain everything step-by-step. You hate when students are lazy. Speak in Hinglish.`
+  },
+  {
+    id: 'principal',
+    name: 'College Principal',
+    role: 'Authority',
+    avatar: '👴',
+    color: 'bg-red-700',
+    time: '24/09/25',
+    systemPrompt: `You are the College Principal. You are very strict, authoritative, and disciplined. You care about attendance, uniforms, and reputation. Speak formally in Hindi and English.`
+  }
+];
+
+/* =================================================================== */
+
+export default function DigitAiApp() {
+  const [apiKey, setApiKey] = useState('');
+  const [view, setView] = useState('setup'); // setup, list, chat
+  const [activeChatId, setActiveChatId] = useState(null);
+  const [messages, setMessages] = useState({}); // { chatId: [msgs] }
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef(null);
+
+  // Load API Key & Chats
+  useEffect(() => {
+    const savedKey = localStorage.getItem('digitai_api_key');
+    if (savedKey) {
+      setApiKey(savedKey);
+      setView('list');
+    }
+    const savedChats = localStorage.getItem('digitai_chats');
+    if (savedChats) {
+      setMessages(JSON.parse(savedChats));
+    }
+  }, []);
+
+  // Save Chats
+  useEffect(() => {
+    localStorage.setItem('digitai_chats', JSON.stringify(messages));
+  }, [messages]);
+
+  const saveApiKey = () => {
+    if (!apiKey.trim()) return;
+    localStorage.setItem('digitai_api_key', apiKey);
+    setView('list');
+  };
+
+  const activeCharacter = CHARACTERS.find(c => c.id === activeChatId);
+
+  const getGeminiResponse = async (text, history) => {
+    try {
+      const char = activeCharacter;
+      const context = history.slice(-5).map(m => ({
+        role: m.sender === 'user' ? 'user' : 'model',
+        parts: [{ text: m.text }]
+      }));
+
+      const payload = {
+        contents: [
+          ...context,
+          { role: 'user', parts: [{ text }] }
+        ],
+        systemInstruction: {
+          parts: [{ text: char.systemPrompt }]
+        }
+      };
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || "Server busy hai Boss, baad mein try karna.";
+    } catch (e) {
+      return "Net slow hai ya key galat hai.";
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!input.trim()) return;
+    
+    const newMsg = { id: Date.now(), text: input, sender: 'user', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+    const chatId = activeChatId;
+    
+    // Update UI immediately
+    setMessages(prev => ({
+      ...prev,
+      [chatId]: [...(prev[chatId] || []), newMsg]
+    }));
+    setInput('');
+    setIsLoading(true);
+
+    // Get History for context
+    const currentHistory = messages[chatId] || [];
+    const replyText = await getGeminiResponse(newMsg.text, currentHistory);
+
+    const replyMsg = { 
+      id: Date.now() + 1, 
+      text: replyText, 
+      sender: 'ai', 
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+    };
+
+    setMessages(prev => ({
+      ...prev,
+      [chatId]: [...(prev[chatId] || []), replyMsg]
+    }));
+    setIsLoading(false);
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') sendMessage();
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+  };
+
+  useEffect(() => {
+    if (view === 'chat') scrollToBottom();
+  }, [messages, view, isLoading]);
+
+  // --- RENDER: SETUP SCREEN ---
+  if (view === 'setup') {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-[#111b21] text-gray-200 p-6">
+        <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-6 animate-pulse">
+            <span className="text-4xl font-bold text-white">D</span>
+        </div>
+        <h1 className="text-2xl font-bold mb-2 text-white">Welcome to DigitAi</h1>
+        <p className="text-gray-400 text-center text-sm mb-8">Rouf Boss ka Personal AI Ecosystem</p>
+        
+        <div className="w-full max-w-md bg-[#202c33] p-6 rounded-xl border border-gray-700 shadow-xl">
+          <label className="text-xs text-green-400 font-semibold uppercase tracking-wider mb-2 block">Step 1: Get Free Key</label>
+          <a 
+            href="https://aistudio.google.com/app/apikey" 
+            target="_blank" 
+            rel="noreferrer"
+            className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-lg mb-6 transition-all text-sm font-medium"
+          >
+            <ExternalLink size={16} /> Get Code (Google AI Studio)
+          </a>
+
+          <label className="text-xs text-green-400 font-semibold uppercase tracking-wider mb-2 block">Step 2: Paste Key Here</label>
+          <div className="relative mb-6">
+            <Key size={18} className="absolute left-3 top-3 text-gray-500" />
+            <input 
+              type="text" 
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="Paste your Gemini API Key..."
+              className="w-full bg-[#2a3942] text-white pl-10 p-3 rounded-lg border border-gray-600 focus:border-green-500 outline-none text-sm placeholder-gray-500"
+            />
+          </div>
+
+          <button 
+            onClick={saveApiKey}
+            disabled={!apiKey}
+            className="w-full bg-[#00a884] hover:bg-[#008f6f] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition-all"
+          >
+            Start DigitAi
+          </button>
+        </div>
+        <p className="mt-8 text-[10px] text-gray-600">Powered by Google Gemini | Developed for DigitMart</p>
+      </div>
+    );
+  }
+
+  // --- RENDER: CHAT LIST (HOME) ---
+  if (view === 'list') {
+    return (
+      <div className="h-screen bg-[#111b21] text-white flex flex-col font-sans">
+        {/* Header */}
+        <div className="bg-[#202c33] p-4 flex justify-between items-center sticky top-0 z-10 border-b border-gray-700">
+          <h1 className="text-xl font-bold text-gray-300">DigitAi</h1>
+          <div className="flex gap-5 text-gray-400">
+            <Camera size={22} />
+            <Search size={22} />
+            <Settings size={22} className="cursor-pointer hover:text-white" onClick={() => { localStorage.removeItem('digitai_api_key'); setView('setup'); }} />
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="bg-[#202c33] flex text-gray-400 font-medium text-sm pb-1">
+          <div className="w-10 flex justify-center py-2"><div className="w-full text-center">👥</div></div>
+          <div className="flex-1 text-center py-2 text-[#00a884] border-b-2 border-[#00a884]">Chats</div>
+          <div className="flex-1 text-center py-2 hover:text-white cursor-pointer">Status</div>
+          <div className="flex-1 text-center py-2 hover:text-white cursor-pointer">Calls</div>
+        </div>
+
+        {/* Chat List */}
+        <div className="flex-1 overflow-y-auto">
+          {CHARACTERS.map((char) => {
+            const lastMsg = messages[char.id]?.[messages[char.id]?.length - 1];
+            return (
+              <div 
+                key={char.id}
+                onClick={() => { setActiveChatId(char.id); setView('chat'); }}
+                className="flex items-center gap-4 p-3 hover:bg-[#202c33] cursor-pointer transition-colors active:bg-[#2a3942]"
+              >
+                <div className={`w-12 h-12 rounded-full ${char.color} flex items-center justify-center text-2xl relative`}>
+                  {char.avatar}
+                  {char.id === 'orina' && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#111b21]"></div>}
+                </div>
+                <div className="flex-1 border-b border-[#2a3942] pb-3 pr-2">
+                  <div className="flex justify-between items-baseline mb-1">
+                    <h3 className="text-gray-100 font-medium text-lg">{char.name}</h3>
+                    <span className={`text-xs ${lastMsg ? 'text-gray-500' : 'text-[#00a884]'}`}>
+                      {lastMsg ? lastMsg.time : char.time}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-400 truncate w-64">
+                    {lastMsg ? (lastMsg.sender === 'user' ? `You: ${lastMsg.text}` : lastMsg.text) : (
+                        <span className="italic text-gray-500 text-xs">Tap to start chatting...</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+          
+          <div className="p-5 text-center text-xs text-gray-500 mt-5">
+            <p>Your personal messages are end-to-end encrypted (Not really, it's just local storage 😉).</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- RENDER: CHAT WINDOW ---
+  return (
+    <div className="h-screen flex flex-col bg-[#0b141a] overflow-hidden">
+      {/* Chat Header */}
+      <div className="bg-[#202c33] p-2 py-3 flex items-center gap-3 shadow-sm z-20">
+        <button onClick={() => setView('list')} className="text-gray-300 p-1 rounded-full hover:bg-white/10">
+          <ArrowLeft size={24} />
+        </button>
+        <div className={`w-10 h-10 rounded-full ${activeCharacter.color} flex items-center justify-center text-xl`}>
+          {activeCharacter.avatar}
+        </div>
+        <div className="flex-1">
+          <h2 className="text-white font-medium text-base truncate">{activeCharacter.name}</h2>
+          <p className="text-xs text-gray-400">
+             {activeCharacter.id === 'orina' ? 'DigitMart • Online' : 'Click for info'}
+          </p>
+        </div>
+        <div className="flex gap-4 text-gray-300 pr-2">
+          <Video size={22} className="cursor-pointer" />
+          <Phone size={22} className="cursor-pointer" />
+          <MoreVertical size={22} className="cursor-pointer" />
+        </div>
+      </div>
+
+      {/* Messages Area (Wallpaper Background) */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-[#0b141a]" 
+           style={{ backgroundImage: "url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')", backgroundBlendMode: 'overlay', backgroundSize: '400px' }}>
+        
+        {/* Encryption Notice */}
+        <div className="flex justify-center mb-4">
+           <span className="bg-[#1f2c34] text-[#ffd279] text-[10px] px-3 py-1.5 rounded-lg shadow-sm">
+             Messages and calls are processed by Gemini AI. Rouf Boss controls this chat.
+           </span>
+        </div>
+
+        {(!messages[activeChatId] || messages[activeChatId].length === 0) && (
+            <div className="flex justify-center mt-10">
+                <span className="bg-[#1f2c34] text-gray-300 text-xs px-4 py-2 rounded-lg shadow-sm text-center">
+                    👋 Say Hi to {activeCharacter.name.split(' ')[0]}!
+                </span>
+            </div>
+        )}
+
+        {messages[activeChatId]?.map((msg) => (
+          <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[85%] md:max-w-[65%] rounded-lg px-3 py-1.5 shadow-sm text-sm relative group
+              ${msg.sender === 'user' ? 'bg-[#005c4b] text-white rounded-tr-none' : 'bg-[#202c33] text-gray-100 rounded-tl-none'}`}>
+              <span className="whitespace-pre-wrap leading-relaxed">{msg.text}</span>
+              <div className="flex justify-end items-center gap-1 mt-1">
+                <span className={`text-[10px] ${msg.sender === 'user' ? 'text-green-200' : 'text-gray-400'}`}>
+                    {msg.time}
+                </span>
+                {msg.sender === 'user' && <span className="text-blue-300 text-[10px]">✓✓</span>}
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {isLoading && (
+           <div className="flex justify-start">
+              <div className="bg-[#202c33] p-3 rounded-lg rounded-tl-none shadow-sm">
+                 <div className="flex gap-1">
+                    <div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce"></div>
+                    <div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce delay-75"></div>
+                    <div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce delay-150"></div>
+                 </div>
+              </div>
+           </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input Area */}
+      <div className="bg-[#202c33] p-2 flex items-center gap-2">
+        <div className="bg-[#2a3942] rounded-full p-2 text-gray-400 cursor-pointer hover:text-gray-300">
+           <Smile size={24} />
+        </div>
+        <div className="bg-[#2a3942] rounded-full p-2 text-gray-400 cursor-pointer hover:text-gray-300">
+           <Paperclip size={20} />
+        </div>
+        <div className="flex-1 bg-[#2a3942] rounded-lg flex items-center px-4 py-2">
+          <input 
+            type="text" 
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyPress}
+            placeholder="Message"
+            className="w-full bg-transparent text-white outline-none placeholder-gray-500 text-sm"
+          />
+        </div>
+        <button 
+            onClick={sendMessage}
+            disabled={!input.trim() || isLoading}
+            className="bg-[#00a884] p-2.5 rounded-full text-white shadow-md hover:bg-[#008f6f] transition-transform active:scale-95 disabled:opacity-70"
+        >
+          <Send size={20} />
+        </button>
+      </div>
+    </div>
+  );
+}
+

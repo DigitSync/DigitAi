@@ -236,6 +236,12 @@
     let questionCount = 0;
     let selectedAnswer = null;
 
+    // --- User-Provided API Key ---
+    // NOTE: This key is being used directly as requested, but it MUST be complete and valid 
+    // for the app to function outside of the Canvas environment.
+    const apiKey = "AIzaSyCmPT4_hcAE8EzlH0rFN2cEyycb3--Thrw"; // WARNING: This key is likely incomplete/invalid.
+    // ----------------------------
+    
     // --- Utility Functions ---
 
     function showMessage(text) {
@@ -283,6 +289,12 @@
             document.getElementById('error-message').classList.remove('hidden');
             return;
         }
+        
+        // Basic check for the (likely incomplete) API key
+        if (apiKey === "AIzaSyCmPT4_hcAE8EzlH0rFN2cEyycb3--Thrw") {
+             console.warn("Using potentially incomplete API Key. Expecting failure if not deployed in Canvas runtime.");
+        }
+
 
         document.getElementById('error-message').classList.add('hidden');
         document.getElementById('setup-screen').classList.add('hidden');
@@ -306,8 +318,7 @@
     }
 
     async function generateQuestions() {
-        // This API call is required for the AI functionality.
-        const apiKey = ""; // API Key will be provided by Canvas runtime
+        // Use the user-provided API key here.
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
         const systemPrompt = `You are an expert educational content generator. Your task is to create ${questionCount} multiple-choice questions (MCQs) for an exam on the subject: "${examTopic}". The output MUST be a JSON array of objects following the provided schema. Ensure each question has exactly 4 options (A, B, C, D) and a single correct answer. Questions must be in professional English.`;
@@ -379,7 +390,7 @@
             console.error("Gemini API Error:", error);
             document.getElementById('loading-screen').classList.add('hidden');
             document.getElementById('setup-screen').classList.remove('hidden');
-            showMessage(`Fatal Error: Question generation failed. This feature requires a host that allows external API calls (e.g., GitHub Pages). Error: ${error.message}`);
+            showMessage(`Fatal Error: Question generation failed. This key might be incomplete or invalid, or your host is blocking the call. Error: ${error.message}`);
         }
     }
 
